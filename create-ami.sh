@@ -1,4 +1,6 @@
 #!/bin/ksh
+##
+
 #
 # Copyright (c) 2015, 2016 Antoine Jacoutot <ajacoutot@openbsd.org>
 #
