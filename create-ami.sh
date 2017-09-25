@@ -156,6 +156,13 @@ create_img() {
 	echo "permit nopass ec2-user" >${_MNT}/etc/doas.conf
 	echo "ec2-user" >${_MNT}/root/.forward
 
+	pr_action "relinking to create unique kernel"
+	sha256 ${_MNT}/bsd | (umask 077; sed "s,${_MNT},," \
+		>${_MNT}/var/db/kernel.SHA256)
+	if [[ -x ${_MNT}/usr/libexec/reorder_kernel ]]; then
+		chroot ${_MNT} /usr/libexec/reorder_kernel
+	fi
+
 	pr_action "unmounting the image"
 	awk '$2~/^\//{sub(/^.+\./,"",$1);print $1, $2}' ${_WRKDIR}/fstab |
 		tail -r | while read _p _m; do
@@ -168,11 +175,12 @@ create_img() {
 	rm ${_WRKDIR}/fstab || true # non-fatal
 	rm -r ${_MNT} || true # non-fatal
 
-	pr_action "image available at: ${_IMG}"
+	pr_action "image available at:"
+	echo "${_IMG}"
 }
 
 volume_ids() {
-	aws --output json ec2 describe-conversion-tasks | \
+	aws --region ${AWS_REGION} --output json ec2 describe-conversion-tasks | \
 		python2.7 -c 'from __future__ import print_function;import sys,json; [print(task["ImportVolume"]["Volume"]["Id"]) if "Id" in task["ImportVolume"]["Volume"] else None for task in json.load(sys.stdin)["ConversionTasks"]]'
 }
 
@@ -198,7 +206,7 @@ create_ami() {
 	pr_action "converting image to stream-based VMDK"
 	vmdktool -v ${_VMDK} ${_IMG}
 
-	pr_action "uploading image to S3 and converting to volume in region ${AWS_REGION}"
+	pr_action "uploading image to S3 and converting to volume in az ${AWS_AZ}"
 	_VOLIDS="$(volume_ids)"
 	ec2-import-volume \
 		${_VMDK} \
